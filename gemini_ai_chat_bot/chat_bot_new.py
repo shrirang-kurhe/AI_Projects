@@ -1,6 +1,5 @@
 import streamlit as st
 import google.generativeai as genai
-from PIL import Image
 
 # Configure API key securely
 genai.configure(api_key=st.secrets["GENAI_API_KEY"])
@@ -11,9 +10,8 @@ model = genai.GenerativeModel('gemini-1.5-flash')
 # Page setup
 st.set_page_config(page_title="Gemini AI Chatbot", layout="wide")
 
-# Load and show bot image
+# Sidebar without image
 with st.sidebar:
-    st.image("bot.png", width=150)
     st.markdown("## 🤖 Gemini AI Chatbot")
     st.write("Built with Google Gemini and Streamlit")
     st.markdown("---")
