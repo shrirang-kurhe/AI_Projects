@@ -3,71 +3,124 @@ import google.generativeai as genai
 from googletrans import Translator
 from gtts import gTTS
 import io
+import os
 
-# ─── CONFIG ────────────────────────────────────────────────────────────────────
-genai.configure(api_key=st.secrets["GENAI_API_KEY"])
+# ─── CONFIGURATION ─────────────────────────────────────────────────────────────
+# Load API key from secrets
+API_KEY = st.secrets.get("GENAI_API_KEY")
+if not API_KEY:
+    st.error("❌ No GENAI_API_KEY found! Add it to .streamlit/secrets.toml or Streamlit Cloud Secrets.")
+    st.stop()
 
-# ─── STATE ──────────────────────────────────────────────────────────────────────
-if "history" not in st.session_state:
-    st.session_state.history = []
-
-# ─── SIDEBAR ────────────────────────────────────────────────────────────────────
-st.sidebar.header("Settings")
-LANGUAGES = {"English": "en", "Spanish": "es", "French": "fr", "Hindi": "hi"}
-lang = st.sidebar.selectbox("Response language", list(LANGUAGES))
-voice = st.sidebar.checkbox("Voice output")
-img_mode = st.sidebar.checkbox("Image mode")
-context = st.sidebar.text_area("Additional Context", height=50)
+genai.configure(api_key=API_KEY)
 translator = Translator()
 
-# ─── UI ─────────────────────────────────────────────────────────────────────────
-st.title("★ Gemini Q/A Chatbot")
-with st.form("chat_form", clear_on_submit=True):
-    prompt = st.text_input("Ask or describe an image:")
-    send = st.form_submit_button("Send")
+# ─── PAGE CONFIG ───────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="Gemini Multilingual Chatbot",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-if send and prompt:
-    # build full prompt
-    full_prompt = f"{context}\n\n{prompt}" if context else prompt
+# ─── SIDEBAR ───────────────────────────────────────────────────────────────────
+st.sidebar.title("⚙️ Settings")
 
-    if img_mode:
-        try:
-            imgs = genai.images.generate(model="image-bison-001", prompt=full_prompt, num_images=1)
-            st.image(imgs[0].url, caption="🖼️ Generated Image")
-            st.session_state.history.append(("You (img)", prompt))
-        except Exception as e:
-            st.error("Image generation failed: " + str(e))
-    else:
-        # translate to EN if needed
-        src = LANGUAGES[lang]
-        if lang != "English":
-            full_prompt = translator.translate(full_prompt, dest="en").text
+# Language selection for response
+LANGUAGES = {
+    "English": "en",
+    "Hindi": "hi",
+    "Spanish": "es",
+    "French": "fr",
+    "German": "de",
+    "Chinese (Simplified)": "zh-cn"
+}
+response_lang = st.sidebar.selectbox("Response Language", options=list(LANGUAGES.keys()), index=0)
+lang_code = LANGUAGES[response_lang]
 
-        # call chat
-        try:
-            resp = genai.chat(model="gemini-1.0", messages=[{"author":"user","content":full_prompt}]).responses[0].content
-        except Exception as e:
-            st.error("Chat failed: " + str(e))
-            resp = ""
+# Additional toggles
+voice_toggle = st.sidebar.checkbox("Enable Voice Output", value=False)
+image_toggle = st.sidebar.checkbox("Enable Image Generation", value=False)
 
-        # back‑translate
-        if lang != "English" and resp:
-            resp = translator.translate(resp, dest=src).text
+st.sidebar.markdown("---")
+st.sidebar.markdown("Built with ❤️ by Your Name")
 
-        st.session_state.history += [("You", prompt), ("AI", resp)]
+# ─── MAIN LAYOUT ───────────────────────────────────────────────────────────────
+col1, col2 = st.columns([3, 1])
+with col1:
+    st.title("🤖 Gemini Multilingual Chatbot")
+    st.markdown(
+        "Ask questions, generate images, and hear responses in your chosen language!"
+    )
+    user_input = st.text_area("Enter your text or image prompt here:", height=100)
+    if st.button("Send", key="send_button"):
+        if not user_input.strip():
+            st.warning("Please enter a prompt before sending.")
+        else:
+            # Build prompt
+            prompt = user_input
+            # Call image generation
+            if image_toggle:
+                try:
+                    with st.spinner("Generating image..."):
+                        result = genai.images.generate(
+                            model="image-bison-001",
+                            prompt=prompt,
+                            num_images=1
+                        )
+                        img_url = result[0].url
+                        st.image(img_url, caption="Generated by Gemini", use_column_width=True)
+                        st.session_state.history.append(("You (image)", prompt))
+                        st.session_state.history.append(("AI (image)", img_url))
+                except Exception as e:
+                    st.error(f"Image generation failed: {e}")
+            else:
+                # Translate input prompt to English if needed
+                translated_prompt = (
+                    translator.translate(prompt, dest="en").text if response_lang != "English" else prompt
+                )
+                # Call chat model
+                try:
+                    with st.spinner("Thinking..."):
+                        chat = genai.chat(
+                            model="gemini-1.0",
+                            messages=[{"author": "user", "content": translated_prompt}]
+                        )
+                        resp_text = chat.responses[0].content
+                except Exception as e:
+                    st.error(f"Chat error: {e}")
+                    resp_text = ""
 
-# ─── RENDER HISTORY & VOICE ─────────────────────────────────────────────────────
-for who, txt in st.session_state.history:
-    if who.startswith("You"):
-        st.markdown(f"**{who}:** {txt}")
-    else:
-        st.markdown(f"**AI:** {txt}")
-        if voice:
-            mp3 = io.BytesIO()
-            gTTS(txt, lang=LANGUAGES[lang]).write_to_fp(mp3)
-            st.audio(mp3.getvalue())
+                # Translate back to user language
+                if response_lang != "English" and resp_text:
+                    resp_text = translator.translate(resp_text, dest=lang_code).text
 
-# ─── CLEAR ──────────────────────────────────────────────────────────────────────
-if st.button("Clear Chat"):
-    st.session_state.history.clear()
-    st.experimental_rerun()
+                # Save to history
+                st.session_state.history.append(("You", prompt))
+                st.session_state.history.append(("AI", resp_text))
+
+                # Display responses
+                for speaker, msg in st.session_state.history[-2:]:
+                    if speaker == "You":
+                        st.markdown(f"**You:** {msg}")
+                    else:
+                        st.markdown(f"**AI:** {msg}")
+                        if voice_toggle and msg:
+                            mp3 = io.BytesIO()
+                            gTTS(text=msg, lang=lang_code).write_to_fp(mp3)
+                            st.audio(mp3.getvalue(), format="audio/mp3")
+
+with col2:
+    st.markdown("### 📜 Chat History")
+    if "history" not in st.session_state:
+        st.session_state.history = []
+    # Show last 10 messages
+    for speaker, msg in st.session_state.history[-10:]:
+        if speaker.endswith("(image)"):
+            st.markdown(f"**{speaker}:**")
+            st.image(msg, width=150)
+        else:
+            st.markdown(f"**{speaker}:** {msg}")
+
+    if st.button("Clear Chat", key="clear_button"):
+        st.session_state.history.clear()
+        st.experimental_rerun()
