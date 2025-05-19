@@ -1,42 +1,54 @@
-# 🌐 Import required libraries
 import streamlit as st
 import google.generativeai as genai
+from PIL import Image
 
-# 🔐 Configure Gemini API Key securely using Streamlit secrets
+# Configure API key securely
 genai.configure(api_key=st.secrets["GENAI_API_KEY"])
 
-# 🤖 Initialize the Gemini model (using gemini-1.5-flash)
+# Initialize model
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-# 🧠 Streamlit UI header
-st.title("Gemini Q/A Chatbot")
-st.write("Ask any question and get AI-powered responses!")
+# Page setup
+st.set_page_config(page_title="Gemini AI Chatbot", layout="wide")
 
-# 💾 Initialize session state for conversation history
+# Load and show bot image
+with st.sidebar:
+    st.image("bot.png", width=150)
+    st.markdown("## 🤖 Gemini AI Chatbot")
+    st.write("Built with Google Gemini and Streamlit")
+    st.markdown("---")
+    st.markdown("### Instructions:")
+    st.write("• Type your question below\n• Click **Ask** to get a response\n• Click **Clear Chat** to reset")
+    st.markdown("---")
+
+# Title and prompt
+st.markdown("<h1 style='text-align: center;'>🤖 Gemini Chatbot Assistant</h1>", unsafe_allow_html=True)
+st.write("")
+
+# Session state for chat history
 if "chat" not in st.session_state:
-    st.session_state.chat = model.start_chat(history=[])  # New conversation session
-    st.session_state.history = []                         # Stores (question, answer) tuples
-
-# 📝 Input box for user question
-user_input = st.text_input("Enter a Question:", "")
-
-# 📤 Handle "Ask" button click
-if st.button("Ask") and user_input:
-    if user_input.lower() != "done":
-        # 🔄 Send the user input to Gemini and stream response
-        response = st.session_state.chat.send_message(user_input, stream=True)
-        response_text = "".join(chunk.text for chunk in response)
-
-        # 🧾 Save the interaction to session history
-        st.session_state.history.append(("You: " + user_input, "AI: " + response_text))
-
-# 🖼️ Display the full chat history
-for user_q, ai_res in st.session_state.history:
-    st.write(user_q)
-    st.write(ai_res)
-
-# 🗑️ "Clear Chat" button to reset the session
-if st.button("Clear Chat"):
     st.session_state.chat = model.start_chat(history=[])
     st.session_state.history = []
-    st.rerun()
+
+# Chat input and interaction
+user_input = st.text_input("💬 Enter your question:", placeholder="Ask me anything...")
+col1, col2 = st.columns([1, 1])
+
+with col1:
+    if st.button("Ask") and user_input:
+        response = st.session_state.chat.send_message(user_input, stream=True)
+        response_text = "".join(chunk.text for chunk in response)
+        st.session_state.history.append(("You", user_input))
+        st.session_state.history.append(("AI", response_text))
+
+with col2:
+    if st.button("Clear Chat"):
+        st.session_state.chat = model.start_chat(history=[])
+        st.session_state.history = []
+        st.rerun()
+
+# Show chat history
+st.markdown("## 🧠 Chat History:")
+for role, message in st.session_state.history:
+    with st.chat_message(role.lower()):
+        st.write(message)
