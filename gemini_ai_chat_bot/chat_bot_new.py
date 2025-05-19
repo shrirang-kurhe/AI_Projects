@@ -10,7 +10,7 @@ model = genai.GenerativeModel('gemini-1.5-flash')
 # Page setup
 st.set_page_config(page_title="Gemini AI Chatbot", layout="wide")
 
-# Sidebar without image
+# Sidebar - No image
 with st.sidebar:
     st.markdown("## 🤖 Gemini AI Chatbot")
     st.write("Built with Google Gemini and Streamlit")
@@ -19,16 +19,15 @@ with st.sidebar:
     st.write("• Type your question below\n• Click **Ask** to get a response\n• Click **Clear Chat** to reset")
     st.markdown("---")
 
-# Title and prompt
+# Title
 st.markdown("<h1 style='text-align: center;'>🤖 Gemini Chatbot Assistant</h1>", unsafe_allow_html=True)
-st.write("")
 
-# Session state for chat history
+# Chat history state
 if "chat" not in st.session_state:
     st.session_state.chat = model.start_chat(history=[])
     st.session_state.history = []
 
-# Chat input and interaction
+# Input and buttons
 user_input = st.text_input("💬 Enter your question:", placeholder="Ask me anything...")
 col1, col2 = st.columns([1, 1])
 
@@ -45,7 +44,7 @@ with col2:
         st.session_state.history = []
         st.rerun()
 
-# Show chat history
+# Show history
 st.markdown("## 🧠 Chat History:")
 for role, message in st.session_state.history:
     with st.chat_message(role.lower()):
